@@ -25,6 +25,7 @@ export const languages: Language[] = [
 	{code: 'de_sie', textId: 'languageGermanSie_label'},
 	{code: 'el', textId: 'languageGreek_label'},
 	{code: 'en', textId: 'languageEnglish_label'},
+	{code: 'en_gb', textId: 'languageEnglishUk_label'},
 	{code: 'es', textId: 'languageSpanish_label'},
 	{code: 'et', textId: 'languageEstonian_label'},
 	{code: 'fa_ir', textId: 'languagePersian_label'},
@@ -62,30 +63,25 @@ export const languageByCode = languages.reduce((acc, curr) => {
 }, {})
 
 const infoLinks = {
-	"recoverCode_link": {
-		"de": "https://tutanota.com/de/howto/#reset",
-		"en": "https://tutanota.com/howto/#reset"
-	},
-	"2FA_link": {
-		"de": "https://tutanota.com/de/howto#2fa",
-		"en": "https://tutanota.com/howto#2fa"
-	},
-	"spamRules_link": {
-		"de": "https://tutanota.com/de/howto#spam",
-		"en": "https://tutanota.com/howto#spam"
-	},
-	"domainInfo_link": {
-		"de": "https://tutanota.com/de/howto/#custom-domain",
-		"en": "https://tutanota.com/howto#custom-domain"
-	},
-	"whitelabel_link": {
-		"de": "https://tutanota.com/de/howto#whitelabel",
-		"en": "https://tutanota.com/howto#whitelabel"
-	},
-	"webview_link": {
-		"de": "https://tutanota.com/howto/#webview",
-		"en": "https://tutanota.com/de/howto/#webview"
-	}
+	"homePage_link": "https://tutanota.com",
+	"about_link": "https://tutanota.com/about",
+	"privacy_link": "https://tutanota.com/privacy",
+	//terms
+	"termsPrivacy_link": "https://tutanota.com/terms#privacy",
+	"termsFree_link": "https://tutanota.com/terms#terms-free",
+	//howto
+	"recoverCode_link": "https://tutanota.com/howto/#reset",
+	"2FA_link": "https://tutanota.com/howto#2fa",
+	"spamRules_link": "https://tutanota.com/howto#spam",
+	"domainInfo_link": "https://tutanota.com/howto#custom-domain",
+	"whitelabel_link": "https://tutanota.com/howto#whitelabel",
+	"webview_link": "https://tutanota.com/de/howto/#webview",
+	//faq
+	"phishing_link": "https://tutanota.com/faq#phishing",
+	"mailAuth_link": "https://tutanota.com/faq#mail-auth",
+	"runInBackground_link": "https://tutanota.com/faq#tray",
+	//blog
+	"premiumProBusiness_link": "https://tutanota.com/blog/posts/premium-pro-business"
 }
 
 /**
@@ -163,8 +159,12 @@ export class LanguageViewModel {
 		if (this.code === lang.code) {
 			return Promise.resolve()
 		}
+
+		// we don't support multiple language files for en so just use the one and only.
+		const code = lang.code.startsWith("en") ? "en" : lang.code
+
 		return asyncImport(typeof module
-		!== "undefined" ? module.id : __moduleName, `${env.rootPathPrefix}src/translations/${lang.code}.js`)
+		!== "undefined" ? module.id : __moduleName, `${env.rootPathPrefix}src/translations/${code}.js`)
 			.then(translations => {
 				this.translations = translations
 				this.code = lang.code
@@ -318,10 +318,7 @@ export class LanguageViewModel {
 	}
 
 	getInfoLink(id: string) {
-		const code = ["de", "de_sie"].includes(this.code)
-			? "de"
-			: "en"
-		return infoLinks[id][code]
+		return infoLinks[id]
 	}
 
 }

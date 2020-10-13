@@ -13,6 +13,8 @@ import type {CalendarEventAttendee} from "../entities/tutanota/CalendarEventAtte
 export const reverse = (objectMap: Object) => Object.keys(objectMap)
                                                     .reduce((r, k) => Object.assign(r, {[objectMap[k]]: k}), {})
 
+export const MAX_NBR_MOVE_DELETE_MAIL_SERVICE = 50
+
 export const GroupType = Object.freeze({
 	User: "0",
 	Admin: "1",
@@ -535,6 +537,7 @@ export const Keys = Object.freeze({
 	RIGHT: {code: 39, name: "→"},
 	DOWN: {code: 40, name: "↓"},
 	DELETE: {code: 46, name: "DEL"},
+	"0": {code: 48, name: "0"},
 	ONE: {code: 49, name: "1"},
 	TWO: {code: 50, name: "2"},
 	THREE: {code: 51, name: "3"},

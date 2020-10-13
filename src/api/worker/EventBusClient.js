@@ -5,7 +5,6 @@ import type {WorkerImpl} from "./WorkerImpl"
 import {decryptAndMapToInstance} from "./crypto/CryptoFacade"
 import {assertWorkerOrNode, getWebsocketOrigin, isAdminClient, isTest, Mode} from "../Env"
 import {_TypeModel as MailTypeModel} from "../entities/tutanota/Mail"
-import {load, loadAll, loadRange} from "./EntityWorker"
 import {firstBiggerThanSecond, GENERATED_MAX_ID, GENERATED_MIN_ID, getLetId} from "../common/EntityFunctions"
 import {
 	AccessBlockedError,
@@ -13,12 +12,11 @@ import {
 	ConnectionError,
 	handleRestError,
 	NotAuthorizedError,
-	NotFoundError,
 	ServiceUnavailableError,
 	SessionExpiredError
 } from "../common/error/RestError"
 import {EntityEventBatchTypeRef} from "../entities/sys/EntityEventBatch"
-import {downcast, identity, neverNull, randomIntFromInterval} from "../common/utils/Utils"
+import {downcast, identity, neverNull, ProgressMonitor, randomIntFromInterval} from "../common/utils/Utils"
 import {OutOfSyncError} from "../common/error/OutOfSyncError"
 import {contains} from "../common/utils/ArrayUtils"
 import type {Indexer} from "./search/Indexer"
@@ -30,6 +28,7 @@ import {CancelledError} from "../common/error/CancelledError"
 import {_TypeModel as PhishingMarkerWebsocketDataTypeModel} from "../entities/tutanota/PhishingMarkerWebsocketData"
 import type {EntityUpdate} from "../entities/sys/EntityUpdate"
 import type {EntityRestInterface} from "./rest/EntityRestClient"
+import {EntityClient} from "../common/EntityClient"
 
 assertWorkerOrNode()
 
@@ -42,6 +41,8 @@ const EventBusState = Object.freeze({
 
 type EventBusStateEnum = $Values<typeof EventBusState>;
 
+// EntityEventBatches expire after 45 days. keep a time diff security of one day.
+const ENTITY_EVENT_BATCH_EXPIRE_MS = 44 * 24 * 60 * 60 * 1000
 const RETRY_AFTER_SERVICE_UNAVAILABLE_ERROR_MS = 30000
 const NORMAL_SHUTDOWN_CLOSE_CODE = 1
 const LARGE_RECONNECT_INTERVAL = [60, 120]
@@ -53,6 +54,7 @@ export class EventBusClient {
 
 	_indexer: Indexer;
 	_cache: EntityRestInterface;
+	_entity: EntityClient;
 	_worker: WorkerImpl;
 	_mail: MailFacade;
 	_login: LoginFacade;
@@ -61,6 +63,7 @@ export class EventBusClient {
 	_socket: ?WebSocket;
 	_immediateReconnect: boolean; // if true tries to reconnect immediately after the websocket is closed
 	_lastEntityEventIds: {[key: Id]: Id[]}; // maps group id to last event ids (max. 1000). we do not have to update these event ids if the groups of the user change because we always take the current users groups from the LoginFacade.
+	_lastUpdateTime: number; // the last time we received an EntityEventBatch or checked for updates. we use this to find out if our data has expired, see ENTITY_EVENT_BATCH_EXPIRE_MS
 	_queueWebsocketEvents: boolean
 	_lastAntiphishingMarkersId: ?Id;
 
@@ -79,6 +82,7 @@ export class EventBusClient {
 		this._worker = worker
 		this._indexer = indexer
 		this._cache = cache
+		this._entity = new EntityClient(cache)
 		this._mail = mail
 		this._login = login
 		this._socket = null
@@ -96,6 +100,7 @@ export class EventBusClient {
 	_reset(): void {
 		this._immediateReconnect = false
 		this._lastEntityEventIds = {}
+		this._lastUpdateTime = 0
 		this._queueWebsocketEvents = false
 		this._websocketWrapperQueue = []
 		this._serviceUnavailableRetry = null
@@ -116,6 +121,11 @@ export class EventBusClient {
 		// make sure a retry will be cancelled by setting _serviceUnavailableRetry to null
 		this._serviceUnavailableRetry = null
 		this._worker.updateWebSocketState("connecting")
+		// Task for updating events are number of groups + 3. Use 2 as base for reconnect state and 1 for processing queued events.
+		const entityEventProgress = new ProgressMonitor(this._eventGroups().length + 3, (percentage) => {
+			if (reconnect) this._worker.updateEntityEventProgress(percentage)
+		})
+		entityEventProgress.workDone(1)
 		this._state = EventBusState.Automatic
 		this._connectTimer = null
 
@@ -134,7 +144,9 @@ export class EventBusClient {
 		this._socket.onopen = () => {
 			this._failedConnectionAttempts = 0
 			console.log("ws open: ", new Date(), "state:", this._state);
-			this._initEntityEvents(reconnect)
+			// Indicate some progress right away
+			entityEventProgress.workDone(1)
+			this._initEntityEvents(reconnect, entityEventProgress)
 			this._worker.updateWebSocketState("connected")
 		};
 		this._socket.onclose = (event: CloseEvent) => this._close(event);
@@ -142,10 +154,10 @@ export class EventBusClient {
 		this._socket.onmessage = (message: MessageEvent) => this._message(message);
 	}
 
-	_initEntityEvents(reconnect: boolean) {
+	_initEntityEvents(reconnect: boolean, entityEventProgress: ProgressMonitor) {
 		this._queueWebsocketEvents = true
-		let p = ((reconnect && Object.keys(this._lastEntityEventIds).length > 0)
-			? this._loadMissedEntityEvents() : this._setLatestEntityEventIds())
+		let existingConnection = reconnect && Object.keys(this._lastEntityEventIds).length > 0
+		let p = existingConnection ? this._loadMissedEntityEvents(entityEventProgress) : this._setLatestEntityEventIds()
 		p.then(() => {
 			this._queueWebsocketEvents = false
 		}).catch(ConnectionError, e => {
@@ -156,13 +168,19 @@ export class EventBusClient {
 			console.log("cancelled retry process entity events after reconnect")
 		}).catch(ServiceUnavailableError, e => {
 			// a ServiceUnavailableError is a temporary error and we have to retry to avoid data inconsistencies
-			this._lastEntityEventIds = {}
+			// some EventBatches/missed events are processed already now
+			// for an existing connection we just keep the current state and continue loading missed events for the other groups
+			// for a new connection we reset the last entity event ids because otherwise this would not be completed in the next try
+			if (!existingConnection) {
+				this._lastEntityEventIds = {}
+				this._lastUpdateTime = 0
+			}
 			console.log("retry init entity events in 30s", e)
 			let promise = Promise.delay(RETRY_AFTER_SERVICE_UNAVAILABLE_ERROR_MS).then(() => {
 				// if we have a websocket reconnect we have to stop retrying
 				if (this._serviceUnavailableRetry === promise) {
 					console.log("retry initializing entity events")
-					return this._initEntityEvents(reconnect)
+					return this._initEntityEvents(reconnect, entityEventProgress)
 				} else {
 					console.log("cancel initializing entity events")
 				}
@@ -172,7 +190,9 @@ export class EventBusClient {
 		}).catch(e => {
 			this._queueWebsocketEvents = false
 			this._worker.sendError(e)
-		})
+		}).finally(() => {
+			entityEventProgress.completed()
+		}) //Done or Failed. We want to show full progress bar for 500ms to indicate that we are done. Don't show the progress bar anymore afterwards.
 	}
 
 
@@ -230,6 +250,7 @@ export class EventBusClient {
 					} else {
 						this._queueWebsocketEvents = true
 						return this._processEntityEvents(data.eventBatch, data.eventBatchOwner, data.eventBatchId).then(() => {
+							this._lastUpdateTime = Date.now()
 							if (this._websocketWrapperQueue.length > 0) {
 								return this._processQueuedEvents()
 							}
@@ -350,36 +371,42 @@ export class EventBusClient {
 		// set all last event ids in one step to avoid that we have just set them for a few groups when a ServiceUnavailableError occurs
 		let lastIds: {[key: Id]: Id[]} = {}
 		return Promise.each(this._eventGroups(), groupId => {
-			return loadRange(EntityEventBatchTypeRef, groupId, GENERATED_MAX_ID, 1, true).then(batches => {
+			return this._entity.loadRange(EntityEventBatchTypeRef, groupId, GENERATED_MAX_ID, 1, true).then(batches => {
 				lastIds[groupId] = [
 					(batches.length === 1) ? getLetId(batches[0])[1] : GENERATED_MIN_ID
 				]
 			})
 		}).then(() => {
 			this._lastEntityEventIds = lastIds
+			this._lastUpdateTime = Date.now()
 			return this._processQueuedEvents()
 		})
 	}
 
-	_loadMissedEntityEvents(): Promise<void> {
+	_loadMissedEntityEvents(entityEventProgress: ProgressMonitor): Promise<void> {
 		if (this._login.isLoggedIn()) {
-			return this._checkIfEntityEventsAreExpired().then(expired => {
-				if (expired) {
-					return this._worker.sendError(new OutOfSyncError())
-				} else {
-					return Promise.each(this._eventGroups(), groupId => {
-						return loadAll(EntityEventBatchTypeRef, groupId, this._getLastEventBatchIdOrMinIdForGroup(groupId))
-							.each(eventBatch => {
-								return this._processEntityEvents(eventBatch.events, groupId, getLetId(eventBatch)[1])
-							})
-							.catch(NotAuthorizedError, () => {
-								console.log("could not download entity updates => lost permission")
-							})
-					}).then(() => {
-						return this._processQueuedEvents()
-					})
-				}
-			})
+			if (Date.now() > this._lastUpdateTime + ENTITY_EVENT_BATCH_EXPIRE_MS) {
+				// we did not check for updates for too long, so some missed EntityEventBatches can not be loaded any more
+				return this._worker.sendError(new OutOfSyncError())
+			} else {
+				return Promise.each(this._eventGroups(), groupId => {
+					return this._entity.loadAll(EntityEventBatchTypeRef, groupId, this._getLastEventBatchIdOrMinIdForGroup(groupId))
+					           .each(eventBatch => {
+						           return this._processEntityEvents(eventBatch.events, groupId, getLetId(eventBatch)[1])
+					           })
+					           .catch(NotAuthorizedError, () => {
+						           console.log("could not download entity updates => lost permission")
+					           }).finally(() => {
+							entityEventProgress.workDone(1)
+						})
+				}).then(() => {
+					this._lastUpdateTime = Date.now()
+					return this._processQueuedEvents().then(() => {
+							entityEventProgress.workDone(1)
+						}
+					)
+				})
+			}
 		} else {
 			return Promise.resolve()
 		}
@@ -398,6 +425,7 @@ export class EventBusClient {
 				p = this._processEntityEvents(wrapper.eventBatch, groupId, eventId);
 			}
 			return p.then(() => {
+				this._lastUpdateTime = Date.now()
 				return this._processQueuedEvents()
 			})
 		}
@@ -451,25 +479,6 @@ export class EventBusClient {
 			})
 			this._serviceUnavailableRetry = promise
 			return promise
-		})
-	}
-
-	/**
-	 * Tries to load the last EntityEventBatch if we had loaded it before. If the batch can be loaded all later event batches are available. If it can not be loaded we assume that at least some later events are also expired.
-	 * @return True if the events have expired, false otherwise.
-	 */
-	_checkIfEntityEventsAreExpired(): Promise<boolean> {
-		return Promise.each(this._eventGroups(), groupId => {
-			let lastEventBatchId = this._getLastEventBatchIdOrMinIdForGroup(groupId)
-			if (lastEventBatchId !== GENERATED_MIN_ID) {
-				return load(EntityEventBatchTypeRef, [groupId, lastEventBatchId]).catch(NotAuthorizedError, () => {
-					console.log("could not download entity updates => lost permission")
-				})
-			}
-		}).then(() => {
-			return false
-		}).catch(NotFoundError, () => {
-			return true
 		})
 	}
 

@@ -10,7 +10,7 @@ import url from "url"
 import {capitalizeFirstLetter} from "../api/common/utils/StringUtils.js"
 import {Keys} from "../api/common/TutanotaConstants"
 import type {Shortcut} from "../misc/KeyManager"
-import {DesktopConfigHandler} from "./config/DesktopConfigHandler"
+import {DesktopConfig} from "./config/DesktopConfig"
 import path from "path"
 
 const MINIMUM_WINDOW_SIZE: number = 350
@@ -33,10 +33,10 @@ export class ApplicationWindow {
 	_shortcuts: Array<Shortcut>;
 	id: number;
 
-	constructor(wm: WindowManager, conf: DesktopConfigHandler, noAutoLogin?: boolean) {
+	constructor(wm: WindowManager, conf: DesktopConfig, noAutoLogin?: boolean) {
 		this._userInfo = null
 		this._ipc = wm.ipc
-		this._startFile = DesktopUtils.pathToFileURL(path.join(app.getAppPath(), conf.get("desktophtml")),)
+		this._startFile = DesktopUtils.pathToFileURL(path.join(app.getAppPath(), conf.getConst("desktophtml")),)
 
 		const isMac = process.platform === 'darwin';
 		this._shortcuts = [
@@ -44,7 +44,7 @@ export class ApplicationWindow {
 			{key: Keys.P, meta: isMac, ctrl: !isMac, exec: () => this._printMail(), help: "print_action"},
 			{key: Keys.F12, exec: () => this._toggleDevTools(), help: "toggleDevTools_action"},
 			{key: Keys.F5, exec: () => {this._browserWindow.loadURL(this._startFile)}, help: "reloadPage_action"},
-			{key: Keys.N, meta: isMac, ctrl: !isMac, exec: () => {wm.newWindow(true)}, help: "openNewWindow_action"}
+			{key: Keys["0"], meta: isMac, ctrl: !isMac, exec: () => {this.setZoomFactor(1)}, help: "resetZoomFactor_action"}
 		].concat(isMac
 			? [{key: Keys.F, meta: true, ctrl: true, exec: () => this._toggleFullScreen(), help: "toggleFullScreen_action"},]
 			: [
@@ -52,10 +52,11 @@ export class ApplicationWindow {
 				{key: Keys.RIGHT, alt: true, exec: () => this._browserWindow.webContents.goForward(), help: "pageForward_label"},
 				{key: Keys.LEFT, alt: true, exec: () => this._tryGoBack(), help: "pageBackward_label"},
 				{key: Keys.H, ctrl: true, exec: () => wm.minimize(), help: "hideWindows_action"},
+				{key: Keys.N, ctrl: true, exec: () => {wm.newWindow(true)}, help: "openNewWindow_action"}
 			])
 
 		console.log("startFile: ", this._startFile)
-		const preloadPath = path.join(app.getAppPath(), conf.get("preloadjs"))
+		const preloadPath = path.join(app.getAppPath(), conf.getConst("preloadjs"))
 		this._createBrowserWindow(wm, preloadPath)
 		this._browserWindow.loadURL(
 			noAutoLogin
@@ -123,7 +124,8 @@ export class ApplicationWindow {
 				contextIsolation: false,
 				webSecurity: true,
 				enableRemoteModule: false,
-				preload: preloadPath
+				preload: preloadPath,
+				spellcheck: false
 			}
 		})
 		this._browserWindow.setMenuBarVisibility(false)

@@ -17,6 +17,8 @@ import {attachDropdown} from "../gui/base/DropdownN"
 import type {DropDownSelectorAttrs} from "../gui/base/DropDownSelectorN"
 import {DropDownSelectorN} from "../gui/base/DropDownSelectorN"
 import {Dialog} from "../gui/base/Dialog"
+import type {UpdateHelpLabelAttrs} from "./DesktopUpdateHelpLabel"
+import {DesktopUpdateHelpLabel} from "./DesktopUpdateHelpLabel"
 
 assertMainOrNode()
 
@@ -32,7 +34,8 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 	_runOnStartup: Stream<?boolean>;
 	_isIntegrated: Stream<?boolean>;
 	_isAutoUpdateEnabled: Stream<?boolean>;
-	_showAutoUpdateOption: Stream<?boolean>;
+	_showAutoUpdateOption: boolean;
+	_updateAvailable: Stream<boolean>;
 	_isPathDialogOpen: boolean;
 
 	constructor() {
@@ -41,7 +44,8 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 		this._runOnStartup = stream(false)
 		this._isIntegrated = stream(false)
 		this._isAutoUpdateEnabled = stream(false)
-		this._showAutoUpdateOption = stream(true)
+		this._showAutoUpdateOption = true
+		this._updateAvailable = stream(false)
 		this._requestDesktopConfig()
 	}
 
@@ -63,9 +67,16 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 			}
 		}
 
-		const setRunAsTrayAppAttrs: DropDownSelectorAttrs<boolean> = {
-			label: env.platformId === 'linux' ? "showTrayIcon_action" : "runAsTrayApp_action",
-			helpLabel: env.platformId === 'linux' ? () => lang.get("mayNotWorkForAllDe_msg") : () => "",
+		const setRunInBackgroundAttrs: DropDownSelectorAttrs<boolean> = {
+			label: "runInBackground_action",
+			helpLabel: () => {
+				const lnk = lang.getInfoLink("runInBackground_link")
+				return [
+					m("span", lang.get("runInBackground_msg") + " "),
+					m("span", lang.get("moreInfo_msg") + " "),
+					m("span.text-break", [m(`a[href=${lnk}][target=_blank]`, lnk)])
+				]
+			},
 			items: [
 				{name: lang.get("yes_label"), value: true},
 				{name: lang.get("no_label"), value: false}
@@ -113,8 +124,13 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 			}
 		}
 
+		const updateHelpLabelAttrs: UpdateHelpLabelAttrs = {
+			updateAvailable: this._updateAvailable
+		}
+
 		const setAutoUpdateAttrs: DropDownSelectorAttrs<boolean> = {
 			label: "autoUpdate_label",
+			helpLabel: () => m(DesktopUpdateHelpLabel, updateHelpLabelAttrs),
 			items: [
 				{name: lang.get("activated_label"), value: true},
 				{name: lang.get("deactivated_label"), value: false}
@@ -155,11 +171,11 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 			m("#user-settings.fill-absolute.scroll.plr-l.pb-xl", [
 				m(".h4.mt-l", lang.get('desktopSettings_label')),
 				env.platformId === 'linux' ? null : m(DropDownSelectorN, setDefaultMailtoHandlerAttrs),
-				env.platformId === 'darwin' ? null : m(DropDownSelectorN, setRunAsTrayAppAttrs),
+				env.platformId === 'darwin' ? null : m(DropDownSelectorN, setRunInBackgroundAttrs),
 				m(DropDownSelectorN, setRunOnStartupAttrs),
 				m(TextFieldN, defaultDownloadPathAttrs),
 				env.platformId === 'linux' ? m(DropDownSelectorN, setDesktopIntegrationAttrs) : null,
-				this._showAutoUpdateOption() ? m(DropDownSelectorN, setAutoUpdateAttrs) : null,
+				this._showAutoUpdateOption ? m(DropDownSelectorN, setAutoUpdateAttrs) : null,
 			])
 		]
 	}
@@ -192,8 +208,9 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 			         this._runAsTrayApp(desktopConfig.runAsTrayApp)
 			         this._runOnStartup(desktopConfig.runOnStartup)
 			         this._isIntegrated(desktopConfig.isIntegrated)
-			         this._showAutoUpdateOption(desktopConfig.showAutoUpdateOption)
+			         this._showAutoUpdateOption = desktopConfig.showAutoUpdateOption
 			         this._isAutoUpdateEnabled(desktopConfig.enableAutoUpdate)
+			         this._updateAvailable(!!desktopConfig.updateInfo)
 			         m.redraw()
 		         })
 	}
@@ -226,6 +243,11 @@ export class DesktopSettingsViewer implements UpdatableSettingsViewer {
 		       })
 	}
 
+	onAppUpdateAvailable(): void {
+		this._updateAvailable(true)
+		m.redraw()
+	}
+
 	// this is all local for now
-	entityEventsReceived = noOp
+	entityEventsReceived = () => Promise.resolve()
 }

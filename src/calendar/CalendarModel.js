@@ -1,7 +1,9 @@
 //@flow
 import type {CalendarMonthTimeRange} from "./CalendarUtils"
 import {
-	assignEventId, filterInt, findPrivateCalendar,
+	assignEventId,
+	filterInt,
+	findPrivateCalendar,
 	getAllDayDateForTimezone,
 	getAllDayDateUTCFromZone,
 	getDiffInDays,
@@ -58,6 +60,7 @@ import {GroupTypeRef} from "../api/entities/sys/Group"
 import type {AlarmInfo} from "../api/entities/sys/AlarmInfo"
 import type {CalendarRepeatRule} from "../api/entities/tutanota/CalendarRepeatRule"
 import {module as replaced} from "@hot"
+import {ParserError} from "../misc/parsing"
 
 
 function eventComparator(l: CalendarEvent, r: CalendarEvent): number {
@@ -269,7 +272,7 @@ export function calculateAlarmTime(date: Date, interval: AlarmIntervalEnum, iana
 			diff = {weeks: 1}
 			break
 		default:
-			diff = {}
+			diff = {minutes: 5}
 	}
 	return DateTime.fromJSDate(date, {zone: ianaTimeZone}).minus(diff).toJSDate()
 }
@@ -331,7 +334,7 @@ export class CalendarModelImpl implements CalendarModel {
 		this._pendingAlarmRequests = new Map()
 		if (!isApp()) {
 			eventController.addEntityListener((updates: $ReadOnlyArray<EntityUpdateData>) => {
-				this._entityEventsReceived(updates)
+				return this._entityEventsReceived(updates)
 			})
 		}
 	}
@@ -451,6 +454,8 @@ export class CalendarModelImpl implements CalendarModel {
 			.then((file) => this._worker.downloadFileContent(file))
 			.then((dataFile: DataFile) => parseCalendarFile(dataFile))
 			.then((parsedCalendarData) => this.processCalendarUpdate(update.sender, parsedCalendarData))
+			.catch((e) => e instanceof ParserError || e instanceof NotFoundError,
+				(e) => console.warn("Error while parsing calendar update", e))
 			.then(() => erase(update))
 			.catch(NotAuthorizedError, (e) => console.warn("Error during processing of calendar update", e))
 			.catch(PreconditionFailedError, (e) => console.warn("Precondition error when processing calendar update", e))
@@ -638,8 +643,8 @@ export class CalendarModelImpl implements CalendarModel {
 		this._scheduledNotifications.set(identifier, timeoutId)
 	}
 
-	_entityEventsReceived(updates: $ReadOnlyArray<EntityUpdateData>) {
-		for (let entityEventData of updates) {
+	_entityEventsReceived(updates: $ReadOnlyArray<EntityUpdateData>): Promise<void> {
+		return Promise.each(updates, entityEventData => {
 			if (isUpdateForTypeRef(UserAlarmInfoTypeRef, entityEventData)) {
 				if (entityEventData.operation === OperationType.CREATE) {
 					const userAlarmInfoId = [entityEventData.instanceListId, entityEventData.instanceId]
@@ -649,15 +654,19 @@ export class CalendarModelImpl implements CalendarModel {
 					// We try to load UserAlarmInfo. Then we wait until the
 					// CalendarEvent is there (which might already be true)
 					// and load it.
-					load(UserAlarmInfoTypeRef, userAlarmInfoId).then((userAlarmInfo) => {
+					return load(UserAlarmInfoTypeRef, userAlarmInfoId).then((userAlarmInfo) => {
 						const {listId, elementId} = userAlarmInfo.alarmInfo.calendarRef
 						const deferredEvent = getFromMap(this._pendingAlarmRequests, elementId, defer)
-						return deferredEvent.promise.then(() => {
+						// Don't wait for the deferred event promise because it can lead to a deadlock.
+						// Since issue #2264 we process event batches sequentially and the
+						// deferred event can never be resolved until the calendar event update is received.
+						deferredEvent.promise.then(() => {
 							return load(CalendarEventTypeRef, [listId, elementId])
 								.then(calendarEvent => {
 									this.scheduleUserAlarmInfo(calendarEvent, userAlarmInfo)
 								})
 						})
+						return Promise.resolve()
 					}).catch(NotFoundError, (e) => console.log(e, "Event or alarm were not found: ", entityEventData, e))
 				} else if (entityEventData.operation === OperationType.DELETE) {
 					this._scheduledNotifications.forEach((value, key) => {
@@ -666,19 +675,20 @@ export class CalendarModelImpl implements CalendarModel {
 							clearTimeout(value)
 						}
 					})
+					return Promise.resolve()
 				}
 			} else if (isUpdateForTypeRef(CalendarEventTypeRef, entityEventData)
 				&& (entityEventData.operation === OperationType.CREATE || entityEventData.operation === OperationType.UPDATE)) {
-				getFromMap(this._pendingAlarmRequests, entityEventData.instanceId, defer).resolve()
+				return getFromMap(this._pendingAlarmRequests, entityEventData.instanceId, defer).resolve()
 			} else if (isUpdateForTypeRef(CalendarEventUpdateTypeRef, entityEventData)
 				&& entityEventData.operation === OperationType.CREATE) {
-				load(CalendarEventUpdateTypeRef, [entityEventData.instanceListId, entityEventData.instanceId])
+				return load(CalendarEventUpdateTypeRef, [entityEventData.instanceListId, entityEventData.instanceId])
 					.then((invite) => this._handleCalendarEventUpdate(invite))
 					.catch(NotFoundError, (e) => {
 						console.log("invite not found", [entityEventData.instanceListId, entityEventData.instanceId], e)
 					})
 			}
-		}
+		}).return()
 	}
 
 	_localAlarmsEnabled(): boolean {

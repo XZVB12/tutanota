@@ -469,6 +469,14 @@ styles.registerStyle('main', () => {
 			height: px(20),
 			width: px(20),
 		},
+		'.icon-progress-tiny': {
+			height: px(15),
+			width: px(15),
+		},
+		'.icon-progress-tiny > svg': {
+			height: px(15),
+			width: px(15),
+		},
 		'.icon-small': {
 			height: px(size.font_size_small),
 			width: px(size.font_size_small)
@@ -1336,9 +1344,17 @@ styles.registerStyle('main', () => {
 			},
 		},
 
+		//We us this class to hide contents that should just be visible for printing
+		".noscreen": {
+			"display": "none",
+		},
+
 		"@media print": {
 			".noprint": {
 				"display": "none",
+			},
+			".noscreen": {
+				"display": "initial",
 			},
 			".print": {
 				"color": "black",

@@ -198,17 +198,17 @@ o.spec("ApplicationWindow Test", function () {
 	}
 
 	const conf = {
-		get: key => {
+		getConst: key => {
 			switch (key) {
 				case 'preloadjs':
 				case 'desktophtml':
 					return key
 				default:
-					throw new Error("unknown conf.get key: " + key)
+					throw new Error("unknown conf.getConst key: " + key)
 			}
 		},
-		getDesktopConfig: key => {
-			throw new Error("unknown conf.getDesktopConfig key: " + key)
+		getVar: key => {
+			throw new Error("unknown conf.getVar key: " + key)
 		}
 	}
 
@@ -263,7 +263,8 @@ o.spec("ApplicationWindow Test", function () {
 				contextIsolation: false,
 				webSecurity: true,
 				enableRemoteModule: false,
-				preload: '/path/to/app/preloadjs'
+				preload: '/path/to/app/preloadjs',
+				spellcheck: false
 			}
 		})
 		o(bwInstance.setMenuBarVisibility.callCount).equals(1)
@@ -326,11 +327,12 @@ o.spec("ApplicationWindow Test", function () {
 			'Control+P',
 			'F12',
 			'F5',
-			'Control+N',
+			'Control+0',
 			'F11',
 			'Alt+Right',
 			'Alt+Left',
 			'Control+H',
+			'Control+N',
 		])
 	})
 
@@ -348,11 +350,12 @@ o.spec("ApplicationWindow Test", function () {
 			'Control+P',
 			'F12',
 			'F5',
-			'Control+N',
+			'Control+0',
 			'F11',
 			'Alt+Right',
 			'Alt+Left',
-			'Control+H'
+			'Control+H',
+			'Control+N',
 		])
 	})
 
@@ -370,7 +373,7 @@ o.spec("ApplicationWindow Test", function () {
 			'Command+P',
 			'F12',
 			'F5',
-			'Command+N',
+			'Command+0',
 			'Command+Control+F',
 		])
 	})
@@ -499,10 +502,6 @@ o.spec("ApplicationWindow Test", function () {
 		electronLocalshortcutMock.callbacks["F5"]()
 		o(bwInstance.loadURL.callCount).equals(2)
 		o(bwInstance.loadURL.args[0]).equals('/path/to/app/desktophtml')
-
-		electronLocalshortcutMock.callbacks["Command+N"]()
-		o(wmMock.newWindow.callCount).equals(1)
-		o(wmMock.newWindow.args[0]).equals(true)
 
 		electronLocalshortcutMock.callbacks["Command+Control+F"]()
 		o(bwInstance.setFullScreen.callCount).equals(1)

@@ -125,6 +125,7 @@ static NSString * const FILES_ERROR_DOMAIN = @"tutanota_files";
                                                         [TUTFileUtil addStatusCodeToResponseDict:responseDict from:httpResponse];
                                                         [TUTFileUtil addErrorIdHeaderToResponseDict:responseDict from:httpResponse];
                                                         [TUTFileUtil addPreconditionHeaderToResponseDict:responseDict from:httpResponse];
+                                                        [TUTFileUtil addSuspensionTimeHeaderToResponseDict:responseDict from:httpResponse];
 														completion(responseDict, nil);
 													}];
 		[task resume];
@@ -174,6 +175,7 @@ static NSString * const FILES_ERROR_DOMAIN = @"tutanota_files";
                 [TUTFileUtil addEncFileUriToResponseDict:responseDict fileUri:filePath];
                 [TUTFileUtil addErrorIdHeaderToResponseDict:responseDict from:httpResponse];
                 [TUTFileUtil addPreconditionHeaderToResponseDict:responseDict from:httpResponse];
+                [TUTFileUtil addSuspensionTimeHeaderToResponseDict:responseDict from:httpResponse];
                 completion(responseDict, nil);
                 
                 
@@ -275,5 +277,19 @@ static NSString * const FILES_ERROR_DOMAIN = @"tutanota_files";
     }
 }
 
+
++ (void) addSuspensionTimeHeaderToResponseDict:(NSMutableDictionary*)responseDict from:(const NSHTTPURLResponse*)httpResponse {
+    const NSString *suspensionTime = httpResponse.allHeaderFields[@"Suspension-Time"];
+    const NSString *retryAfter = httpResponse.allHeaderFields[@"Retry-After"];
+    if (retryAfter != nil) {
+        [responseDict setValue:retryAfter forKey:@"suspensionTime"];
+    } else if (suspensionTime != nil) {
+        [responseDict setValue:suspensionTime forKey:@"suspensionTime"];
+    } else {
+        [responseDict setValue:NSNull.null forKey:@"suspensionTime"];
+    }
+}
+
 @end
 
+			

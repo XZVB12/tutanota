@@ -14,6 +14,9 @@ import {Icons} from "../base/icons/Icons"
 import {nativeApp} from "../../native/NativeWrapper"
 import {Request} from "../../api/common/WorkerProtocol"
 import {AriaLandmarks, landmarkAttrs} from "../../api/common/utils/AriaUtils"
+import {attachDropdown} from "../base/DropdownN"
+import {noOp} from "../../api/common/utils/Utils"
+import {keyManager} from "../../misc/KeyManager"
 
 type Attrs = void
 
@@ -43,15 +46,40 @@ export class DrawerMenu implements MComponent<Attrs> {
 					colors: ButtonColors.DrawerNav
 				})
 				: null,
-			logins.isUserLoggedIn() && logins.getUserController().isPremiumAccount()
-				? m(ButtonN, {
+			m(ButtonN, attachDropdown(
+				{
+					label: "showHelp_action",
 					icon: () => BootIcons.Help,
-					label: "supportMenu_label",
-					click: () => showSupportDialog(),
 					type: ButtonType.ActionLarge,
+					click: noOp,
+					noBubble: true,
 					colors: ButtonColors.DrawerNav,
-				})
-				: null,
+				},
+				() => [
+					{
+						label: "supportMenu_label",
+						click: () => showSupportDialog(),
+						type: ButtonType.Dropdown,
+						colors: ButtonColors.DrawerNav,
+					},
+					{
+						label: "keyboardShortcuts_title",
+						click: () => keyManager.openF1Help(),
+						type: ButtonType.Dropdown,
+						colors: ButtonColors.DrawerNav,
+					}
+				],
+				() => {
+					// if the account is premium let the user choice, otherwise open the F1-Help
+					if (logins.isUserLoggedIn() && logins.getUserController().isPremiumAccount()) {
+						return true;
+					} else {
+						keyManager.openF1Help();
+						return false;
+					}
+				},
+				300
+			)),
 			isNewMailActionAvailable()
 				? m(ButtonN, {
 					icon: () => BootIcons.Share,
@@ -76,16 +104,7 @@ export class DrawerMenu implements MComponent<Attrs> {
 				click: () => m.route.set(LogoutUrl),
 				type: ButtonType.ActionLarge,
 				colors: ButtonColors.DrawerNav,
-			}),
-			isDesktop()
-				? m(ButtonN, {
-					icon: () => Icons.Power,
-					label: "quit_action",
-					click: () => nativeApp.invokeNative(new Request('closeApp', [])),
-					type: ButtonType.ActionLarge,
-					colors: ButtonColors.DrawerNav
-				})
-				: null,
+			})
 		]))
 	}
 }

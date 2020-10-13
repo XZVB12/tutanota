@@ -1,5 +1,5 @@
 // @flow
-import {app, dialog, ipcMain} from 'electron'
+import {dialog, ipcMain} from 'electron'
 import {lang} from "../misc/LanguageViewModel"
 import type {WindowManager} from "./DesktopWindowManager.js"
 import {err} from './DesktopErrorHandler.js'
@@ -8,8 +8,8 @@ import type {DeferredObject} from "../api/common/utils/Utils"
 import {downcast, noOp} from "../api/common/utils/Utils"
 import {errorToObj, objToError} from "../api/common/WorkerProtocol"
 import DesktopUtils from "../desktop/DesktopUtils"
-import type {DesktopConfigHandler} from "./config/DesktopConfigHandler"
-import {DesktopConfigKey} from "./config/DesktopConfigHandler"
+import type {DesktopConfig} from "./config/DesktopConfig"
+import {DesktopConfigKey} from "./config/DesktopConfig"
 import {
 	disableAutoLaunch,
 	enableAutoLaunch,
@@ -26,12 +26,13 @@ import type {DesktopCryptoFacade} from "./DesktopCryptoFacade"
 import type {DesktopDownloadManager} from "./DesktopDownloadManager"
 import type {SseInfo} from "./sse/DesktopSseClient"
 import {base64ToUint8Array} from "../api/common/utils/Encoding"
+import type {ElectronUpdater} from "./ElectronUpdater"
 
 /**
  * node-side endpoint for communication between the renderer thread and the node thread
  */
 export class IPC {
-	_conf: DesktopConfigHandler;
+	_conf: DesktopConfig;
 	_sse: DesktopSseClient;
 	_wm: WindowManager;
 	_notifier: DesktopNotifier;
@@ -42,9 +43,10 @@ export class IPC {
 	_initialized: Array<DeferredObject<void>>;
 	_requestId: number = 0;
 	_queue: {[string]: Function};
+	_updater: ?ElectronUpdater;
 
 	constructor(
-		conf: DesktopConfigHandler,
+		conf: DesktopConfig,
 		notifier: DesktopNotifier,
 		sse: DesktopSseClient,
 		wm: WindowManager,
@@ -52,6 +54,7 @@ export class IPC {
 		alarmStorage: DesktopAlarmStorage,
 		desktopCryptoFacade: DesktopCryptoFacade,
 		dl: DesktopDownloadManager,
+		updater: ?ElectronUpdater
 	) {
 		this._conf = conf
 		this._sse = sse
@@ -61,6 +64,12 @@ export class IPC {
 		this._alarmStorage = alarmStorage
 		this._crypto = desktopCryptoFacade
 		this._dl = dl
+		this._updater = updater
+		if (!!this._updater) {
+			this._updater.setUpdateDownloadedListener(() => {
+				this._wm.getAll().forEach(w => this.sendRequest(w.id, 'appUpdateDownloaded', []))
+			})
+		}
 
 		this._initialized = []
 		this._queue = {}
@@ -112,10 +121,13 @@ export class IPC {
 					isAutoLaunchEnabled(),
 					isIntegrated(),
 					(isMailtoHandler, autoLaunchEnabled, isIntegrated) => {
-						const config = this._conf.getDesktopConfig()
+						const config = this._conf.getVar()
 						config.isMailtoHandler = isMailtoHandler
 						config.runOnStartup = autoLaunchEnabled
 						config.isIntegrated = isIntegrated
+						config.updateInfo = !!this._updater
+							? this._updater.updateInfo
+							: null
 						return config
 					})
 			case 'openFileChooser':
@@ -140,12 +152,9 @@ export class IPC {
 				// key, path
 				return this._crypto.aesDecryptFile(...args.slice(0, 2))
 			case 'updateDesktopConfig':
-				return this._conf.setDesktopConfig('any', args[0])
+				return this._conf.setVar('any', args[0])
 			case 'openNewWindow':
 				this._wm.newWindow(true)
-				return Promise.resolve()
-			case 'closeApp':
-				app.quit()
 				return Promise.resolve()
 			case 'showWindow':
 				return this.initialized(windowId).then(() => {
@@ -208,6 +217,14 @@ export class IPC {
 				return Promise.resolve()
 			case 'changeLanguage':
 				return lang.setLanguage(args[0])
+			case 'manualUpdate':
+				return !!this._updater
+					? this._updater.manualUpdate()
+					: Promise.resolve(false)
+			case 'isUpdateAvailable':
+				return !!this._updater
+					? Promise.resolve(this._updater.updateInfo)
+					: Promise.resolve(null)
 			default:
 				return Promise.reject(new Error(`Invalid Method invocation: ${method}`))
 		}

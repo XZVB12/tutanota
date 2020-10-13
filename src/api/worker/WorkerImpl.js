@@ -9,7 +9,6 @@ import {_service} from "./rest/ServiceRestClient"
 import {random} from "./crypto/Randomizer"
 import {assertWorkerOrNode} from "../Env"
 import {nativeApp} from "../../native/NativeWrapper"
-import {restClient} from "./rest/RestClient"
 import {TotpVerifier} from "./crypto/TotpVerifier"
 import type {EntropySrcEnum} from "../common/TutanotaConstants"
 import {loadContactForm} from "./facades/ContactFormFacade"
@@ -119,7 +118,7 @@ export class WorkerImpl {
 			},
 			restRequest: (message: Request) => {
 				message.args[3] = Object.assign(locator.login.createAuthHeaders(), message.args[3])
-				return restClient.request.apply(restClient, message.args)
+				return locator.restClient.request.apply(locator.restClient, message.args)
 			},
 			entityRequest: (message: Request) => {
 				return locator.cache.entityRequest.apply(locator.cache, message.args)
@@ -409,6 +408,10 @@ export class WorkerImpl {
 	updateWebSocketState(state: WsConnectionState): Promise<void> {
 		console.log("ws displayed state: ", state)
 		return this._queue.postMessage(new Request("updateWebSocketState", [state]))
+	}
+
+	updateEntityEventProgress(state: number): Promise<void> {
+		return this._queue.postMessage(new Request("updateEntityEventProgress", [state]))
 	}
 
 	updateCounter(update: WebsocketCounterData): Promise<void> {

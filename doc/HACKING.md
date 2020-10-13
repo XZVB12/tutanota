@@ -6,7 +6,7 @@
  * `src`: Common part and the desktop client code
  * `app-android`: Android specific parts
  * `app-ios`: iOS specific parts
- * `flow: contains `*implicitly* imported [Flow](https://flow.org/) typing definitions. Avoid putting something there,
+ * `flow`: contains *implicitly* imported [Flow](https://flow.org/) typing definitions. Avoid putting something there,
  it is buggy.
  * `libs`: "vendor" directory containing our dependencies in non-minified and minified form. May be improved. We take
  security seriously so we review diff between each version.
@@ -28,7 +28,7 @@ contains most of the logic for server communication, encryption, indexing etc.
 
 ### Glossary
  * `SomethingView`: Big part of the app, corresponds to the URL, e.g. `mail`, `contact`, `settings`, `search`
- * `SomehingListView`: Component which displays things in the list, usually in the second column
+ * `SomethingListView`: Component which displays things in the list, usually in the second column
  * `SomethingViewer`: Component which usually displays one element (e.g. selected email or contact)
  * `SomethingModel`: Logic for some part of the app, lives in the main part
  * `SomethingController`: Something that does some bookkeeping or general action but is not tied to the specific part

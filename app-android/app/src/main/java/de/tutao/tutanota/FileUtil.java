@@ -213,6 +213,10 @@ public class FileUtil {
 			response.put("statusCode", con.getResponseCode());
 			response.put("errorId", con.getHeaderField("Error-Id")); // see ResourceConstants.ERROR_ID_HEADER
 			response.put("precondition", con.getHeaderField("Precondition")); // see ResourceConstants.PRECONDITION_HEADER
+			response.put("suspensionTime", con.getHeaderField("Retry-After"));
+			if (!response.has("suspensionTime")) {
+				response.put("suspensionTime", con.getHeaderField("Suspension-Time"));
+			}
 			return response;
 		} finally {
 			con.disconnect();
@@ -247,6 +251,10 @@ public class FileUtil {
 			result.put("encryptedFileUri", encryptedFile != null ? Utils.fileToUri(encryptedFile) : JSONObject.NULL);
 			result.put("errorId", con.getHeaderField("Error-Id")); // see ResourceConstants.ERROR_ID_HEADER
 			result.put("precondition", con.getHeaderField("Precondition")); // see ResourceConstants.PRECONDITION_HEADER
+			result.put("suspensionTime", con.getHeaderField("Retry-After"));
+			if (!result.has("suspensionTime")) {
+				result.put("suspensionTime", con.getHeaderField("Suspension-Time"));
+			}
 			return result;
 		} finally {
 			if (con != null) {

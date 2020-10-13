@@ -11,7 +11,7 @@ module.exports = {
 		"other"
 	],
 	"created_at": "2018-01-12T10:51:54Z",
-	"updated_at": "2020-08-07T14:00:22Z",
+	"updated_at": "2020-08-10T08:35:37Z",
 	"source_locale": {
 		"id": "2001c6fdcc9cd338c1d600cb2636918b",
 		"name": "de",
@@ -44,7 +44,6 @@ module.exports = {
 		"addCustomDomainAdresses_msg": "Die Domain wurde für Ihre Konto registriert. Um sie benutzen zu können, fügen Sie Ihrem aktuellen Benutzer bitte mindestens einen Alias hinzu. Alternativ können Sie neue Benutzer für die Domain anlegen.",
 		"addCustomDomainAliases_msg": "Fügen Sie dem aktuellen Postfach einen E-Mail-Alias hinzu, wenn Sie eine weitere E-Mail-Adresse für sich selbst benötigen.",
 		"addCustomDomainUsers_msg": "Erstellen Sie neue Benutzer oder neue E-Mail-Aliasse für bestehende Benutzer, wenn Sie E-Mail-Adressen für andere Personen benötigen.",
-		"addCustomDomainValidationRecord_msg": "Bitte erstellen Sie einen TXT-Eintrag für Ihre Domain wie unten angezeigt:",
 		"addCustomDomain_action": "Eigene Domain hinzufügen",
 		"addDNSValue_label": "Wert hinzufügen",
 		"addEmailAlias_label": "Alias anlegen",
@@ -273,7 +272,6 @@ module.exports = {
 		"customColors_label": "Eigene Farben",
 		"customDomainDeletePreconditionFailed_msg": "Bitte deaktivieren Sie zunächst alle Benutzer und alle E-Mail-Aliasse mit der Domain: {domainName}.",
 		"customDomainDeletePreconditionWhitelabelFailed_msg": "Bitte deaktivieren Sie zunächst alle Benutzer und alle E-Mail-Aliasse mit der Domain: {domainName} und entfernen Sie die Domain als Registrierungs-Domain.",
-		"customDomainDomainAssigned_msg": "Diese Domain wurde bereits hinzugefügt.",
 		"customDomainErrorDnsLookupFailure_msg": "Fehler beim Abfragen der DNS-Informationen.",
 		"customDomainErrorDomainNotAvailable_msg": "Diese Domain ist nicht verfügbar.",
 		"customDomainErrorDomainNotFound_msg": "Wir können diese Domain im DNS nicht finden. Bitte prüfen Sie den Domain-Namen.",
@@ -391,7 +389,6 @@ module.exports = {
 		"enterDomainFieldHelp_label": "Mit dieser eigenen E-Mail-Domain können Sie E-Mail-Adressen wie hello@{domain} erstellen.",
 		"enterDomainGetReady_msg": "Sie werden Änderungen an Ihren DNS Einstellungen vornehmen müssen. Bitte öffnen Sie ein neues Browserfenster und melden Sie sich in der Verwaltungsplattform Ihres Domainanbieters an. Der Einrichtungsassistent wird Ihnen bei jedem Schritt anzeigen, welche Änderungen nötig sind.",
 		"enterDomainIntroduction_msg": "Mit Tutanota können Sie Ihre eigene Domain in nur wenigen Schritten einrichten.",
-		"enterDomain_msg": "Beginnen Sie die Einrichtung, indem Sie Ihre eigene E-Mail-Domain eingeben.",
 		"enterMissingPassword_msg": "Es wurde kein Passwort gefunden, bitte ein Passwort angeben.",
 		"enterName_msg": "Bitte geben Sie einen Namen an.",
 		"enterPaymentDataFirst_msg": "Bitte geben Sie zuerst Ihre Zahlungsdaten ein, bevor Sie weitere Pakete buchen.",
@@ -662,7 +659,6 @@ module.exports = {
 		"markUnread_action": "Ungelesen",
 		"matchCase_alt": "Groß/Kleinschreibung beachten",
 		"maybe_label": "Vielleicht",
-		"mayNotWorkForAllDe_msg": "Dies kann für manche Linux-Desktops nicht verfügbar sein.",
 		"mergeAllSelectedContacts_msg": "Sind Sie sicher, dass Sie die ausgewählten Kontakte zusammenführen möchten?",
 		"mergeContacts_action": "Kontakte zusammenführen",
 		"merge_action": "Zusammenführen",
@@ -926,7 +922,6 @@ module.exports = {
 		"retry_action": "Wiederholen",
 		"richText_label": "Rich Text",
 		"role_placeholder": "Rolle",
-		"runAsTrayApp_action": "Als Hintergrundanwendung ausführen",
 		"runOnStartup_action": "Bei Systemstart ausführen",
 		"saveAll_action": "Alle speichern",
 		"saveDownloadNotPossibleIe_msg": "Leider unterstützt der mobile Internet Explorer nicht das Abspeichern oder Anzeigen von Anhängen. Bitte verwenden Sie dafür einen Desktop-Browser.",
@@ -1020,7 +1015,6 @@ module.exports = {
 		"showMore_action": "MEHR ANZEIGEN",
 		"showRejectReason_action": "Ablehnungsgrund anzeigen",
 		"showRichTextToolbar_action": "Formatierungswerkzeuge",
-		"showTrayIcon_action": "Symbol in Benachrichtigungsfeld anzeigen",
 		"showURL_alt": "Link öffnen",
 		"show_action": "Anzeigen",
 		"signedOn_msg": "Unterschrieben am {date}.",
@@ -1186,6 +1180,12 @@ module.exports = {
 		"yourCalendars_label": "Deine Kalender",
 		"yourFolders_action": "Ihre ORDNER",
 		"yourMessage_label": "Ihre Nachricht",
-		"you_label": "Sie"
+		"you_label": "Sie",
+		"runInBackground_action": "Im Hintergrund ausführen",
+		"runInBackground_msg": "Ermöglicht fensterlose Push-Nachrichten und die Steuerung vom Infobereich.",
+		"noUpdateAvailable_msg": "Keine neue Version verfügbar.",
+		"installNow_action": "Jetzt installieren.",
+		"checkingForUpdate_action": "Suche nach Aktualisierung…",
+		"resetZoomFactor_action": "Zoomfaktor zurücksetzen"
 	}
 }

@@ -354,9 +354,9 @@ export class MailEditor {
 		}
 
 		this._entityEventReceived = (updates) => {
-			for (let update of updates) {
-				this._handleEntityEvent(update)
-			}
+			return Promise.each(updates, update => {
+				return this._handleEntityEvent(update)
+			}).return()
 		}
 
 		this.dialog = Dialog.largeDialog(headerBarAttrs, this)
@@ -522,6 +522,8 @@ export class MailEditor {
 	}
 
 	initWithTemplate(recipients: Recipients, subject: string, bodyText: string, confidential: ?boolean, senderMailAddress?: string): Promise<void> {
+		this._blockExternalContent = false
+
 		function toMailAddress({name, address}: {name: ?string, address: string}) {
 			return createMailAddress({name: name || "", address})
 		}
@@ -1111,7 +1113,7 @@ export class MailEditor {
 		return buttonAttrs
 	}
 
-	_handleEntityEvent(update: EntityUpdateData): void {
+	_handleEntityEvent(update: EntityUpdateData): Promise<void> {
 		const {operation, instanceId, instanceListId} = update
 		if (isUpdateForTypeRef(ContactTypeRef, update)
 			&& (operation === OperationType.UPDATE || operation === OperationType.DELETE)) {
@@ -1119,7 +1121,7 @@ export class MailEditor {
 			let allBubbleLists = [this.toRecipients.bubbles, this.ccRecipients.bubbles, this.bccRecipients.bubbles]
 			allBubbleLists.forEach(bubbles => {
 				bubbles.forEach(bubble => {
-					if (bubble => bubble.entity.contact && bubble.entity.contact._id
+					if (bubble.entity.contact && bubble.entity.contact._id
 						&& isSameId(bubble.entity.contact._id, contactId)) {
 						if (operation === OperationType.UPDATE) {
 							this._updateBubble(bubbles, bubble, contactId)
@@ -1130,6 +1132,7 @@ export class MailEditor {
 				})
 			})
 		}
+		return Promise.resolve()
 	}
 
 	_updateBubble(bubbles: Bubble<RecipientInfo> [], oldBubble: Bubble<RecipientInfo>, contactId: IdTuple) {
@@ -1216,7 +1219,7 @@ export class MailEditor {
 			if (!logins.getUserController().isPremiumAccount()) {
 				const message = lang.get("premiumOffer_msg", {"{1}": formatPrice(1, true)})
 				const title = lang.get("upgradeReminderTitle_msg")
-				Dialog.reminder(title, message, "https://tutanota.com/blog/posts/premium-pro-business").then(confirm => {
+				Dialog.reminder(title, message, lang.getInfoLink("premiumProBusiness_link")).then(confirm => {
 					if (confirm) {
 						showUpgradeWizard()
 					}

@@ -181,9 +181,9 @@ export class MailView implements CurrentView {
 		this._setupShortcuts()
 
 		locator.eventController.addEntityListener((updates) => {
-			for (let update of updates) {
-				this.entityEventReceived(update)
-			}
+			return Promise.each(updates, update => {
+				return this.entityEventReceived(update)
+			}).return()
 		})
 	}
 
@@ -772,30 +772,33 @@ export class MailView implements CurrentView {
 		this.mailList.list.selectNone()
 		let deleteMailData = createDeleteMailData()
 		deleteMailData.folder = folder._id
+		// The request will be handled async by server
 		return showProgressDialog("progressDeleting_msg", serviceRequestVoid(TutanotaService.MailService, HttpMethod.DELETE, deleteMailData))
 			.catch(PreconditionFailedError, e => Dialog.error("operationStillActive_msg"))
 	}
 
 
-	entityEventReceived<T>(update: EntityUpdateData): void {
+	entityEventReceived<T>(update: EntityUpdateData): Promise<void> {
 		if (isUpdateForTypeRef(MailTypeRef, update) && this.mailList) {
 			const {instanceListId, instanceId, operation} = update
 			let promise = Promise.resolve()
 			if (instanceListId === this.mailList.listId) {
 				promise = this.mailList.list.entityEventReceived(instanceId, operation)
 			}
-			promise.then(() => {
+			return promise.then(() => {
 				// run the displayed mail update after the update on the list is finished to avoid parallel email loading
 				// update the displayed or edited mail if necessary
 				if (operation === OperationType.UPDATE && this.mailViewer
 					&& isSameId(this.mailViewer.mail._id, [neverNull(instanceListId), instanceId])) {
-					load(MailTypeRef, this.mailViewer.mail._id).then(updatedMail => {
+					return load(MailTypeRef, this.mailViewer.mail._id).then(updatedMail => {
 						this.mailViewer = new MailViewer(updatedMail, false)
 					}).catch(() => {
 						// ignore. might happen if a mail was just sent
 					})
 				}
 			})
+		} else {
+			return Promise.resolve()
 		}
 	}
 

@@ -1,5 +1,5 @@
 // @flow
-import {load, loadRoot, serviceRequest, serviceRequestVoid, setup, update} from "../EntityWorker"
+import {load, serviceRequest, serviceRequestVoid, setup, update} from "../EntityWorker"
 import {SysService} from "../../entities/sys/Services"
 import {
 	base64ToBase64Ext,
@@ -38,21 +38,31 @@ import {aes128Decrypt, aes128RandomKey, aes256RandomKey} from "../crypto/Aes"
 import {random} from "../crypto/Randomizer"
 import {CryptoError} from "../../common/error/CryptoError"
 import {createSaltData} from "../../entities/sys/SaltData"
+import type {SaltReturn} from "../../entities/sys/SaltReturn"
 import {SaltReturnTypeRef} from "../../entities/sys/SaltReturn"
+import type {GroupInfo} from "../../entities/sys/GroupInfo"
 import {GroupInfoTypeRef} from "../../entities/sys/GroupInfo"
 import {TutanotaPropertiesTypeRef} from "../../entities/tutanota/TutanotaProperties"
+import type {User} from "../../entities/sys/User"
 import {UserTypeRef} from "../../entities/sys/User"
 import {defer, neverNull, noOp} from "../../common/utils/Utils"
-import {_loadEntity, GENERATED_ID_BYTES_LENGTH, HttpMethod, isSameId, isSameTypeRefByAttr, MediaType} from "../../common/EntityFunctions"
+import {
+	_loadEntity,
+	GENERATED_ID_BYTES_LENGTH,
+	HttpMethod,
+	isSameId,
+	isSameTypeRefByAttr,
+	MediaType
+} from "../../common/EntityFunctions"
 import {assertWorkerOrNode, isAdminClient, isTest} from "../../Env"
 import {hash} from "../crypto/Sha256"
 import {createChangePasswordData} from "../../entities/sys/ChangePasswordData"
 import {EventBusClient} from "../EventBusClient"
 import {createCreateSessionData} from "../../entities/sys/CreateSessionData"
+import type {CreateSessionReturn} from "../../entities/sys/CreateSessionReturn"
 import {CreateSessionReturnTypeRef} from "../../entities/sys/CreateSessionReturn"
 import {_TypeModel as SessionModelType, SessionTypeRef} from "../../entities/sys/Session"
 import {EntityRestClient, typeRefToPath} from "../rest/EntityRestClient"
-import {restClient} from "../rest/RestClient"
 import {createSecondFactorAuthGetData} from "../../entities/sys/SecondFactorAuthGetData"
 import {SecondFactorAuthGetReturnTypeRef} from "../../entities/sys/SecondFactorAuthGetReturn"
 import {SecondFactorPendingError} from "../../common/error/SecondFactorPendingError"
@@ -63,19 +73,17 @@ import {createDeleteCustomerData} from "../../entities/sys/DeleteCustomerData"
 import {createAutoLoginDataGet} from "../../entities/sys/AutoLoginDataGet"
 import {AutoLoginDataReturnTypeRef} from "../../entities/sys/AutoLoginDataReturn"
 import {CancelledError} from "../../common/error/CancelledError"
+import type {PasswordChannelReturn} from "../../entities/tutanota/PasswordChannelReturn"
 import {PasswordChannelReturnTypeRef} from "../../entities/tutanota/PasswordChannelReturn"
 import {TutanotaService} from "../../entities/tutanota/Services"
 import {PasswordMessagingReturnTypeRef} from "../../entities/tutanota/PasswordMessagingReturn"
 import {createPasswordMessagingData} from "../../entities/tutanota/PasswordMessagingData"
 import {createRecoverCode, RecoverCodeTypeRef} from "../../entities/sys/RecoverCode"
 import {createResetFactorsDeleteData} from "../../entities/sys/ResetFactorsDeleteData"
-import type {User} from "../../entities/sys/User"
-import type {GroupInfo} from "../../entities/sys/GroupInfo"
-import type {CreateSessionReturn} from "../../entities/sys/CreateSessionReturn"
-import type {PasswordChannelReturn} from "../../entities/tutanota/PasswordChannelReturn"
-import type {SaltReturn} from "../../entities/sys/SaltReturn"
 import type {GroupMembership} from "../../entities/sys/GroupMembership"
 import type {EntityUpdate} from "../../entities/sys/EntityUpdate"
+import {RestClient} from "../rest/RestClient"
+import {EntityClient} from "../../common/EntityClient"
 
 assertWorkerOrNode()
 
@@ -99,9 +107,13 @@ export class LoginFacade {
 	 * Used for cancelling second factor immediately
 	 */
 	_loggingInPromiseWrapper: ?{promise: Promise<void>, reject: (Error) => void};
+	_restClient: RestClient;
+	_entity: EntityClient;
 
-	constructor(worker: WorkerImpl) {
+	constructor(worker: WorkerImpl, restClient: RestClient, entity: EntityClient) {
 		this._worker = worker
+		this._restClient = restClient
+		this._entity = entity
 		this.reset()
 	}
 
@@ -407,10 +419,10 @@ export class LoginFacade {
 			'accessToken': neverNull(accessToken),
 			"v": SessionModelType.version
 		}
-		return restClient.request(path, HttpMethod.DELETE, {}, headers, null, MediaType.Json)
-		                 .catch(NotAuthenticatedError, () => {
-			                 console.log("authentication failed => session is already closed")
-		                 }).catch(NotFoundError, () => {
+		return this._restClient.request(path, HttpMethod.DELETE, {}, headers, null, MediaType.Json)
+		           .catch(NotAuthenticatedError, () => {
+			           console.log("authentication failed => session is already closed")
+		           }).catch(NotFoundError, () => {
 				console.log("authentication failed => session instance is already deleted")
 			})
 	}
@@ -433,7 +445,7 @@ export class LoginFacade {
 			'accessToken': accessToken,
 			"v": SessionModelType.version
 		}
-		return restClient.request(path, HttpMethod.GET, {}, headers, null, MediaType.Json).then(instance => {
+		return this._restClient.request(path, HttpMethod.GET, {}, headers, null, MediaType.Json).then(instance => {
 			let session = JSON.parse(instance)
 			return {userId: session.user, accessKey: base64ToKey(session.accessKey)}
 		})
@@ -516,7 +528,7 @@ export class LoginFacade {
 	 * Loads entropy from the last logout.
 	 */
 	loadEntropy(): Promise<void> {
-		return loadRoot(TutanotaPropertiesTypeRef, this.getUserGroupId()).then(tutanotaProperties => {
+		return this._entity.loadRoot(TutanotaPropertiesTypeRef, this.getUserGroupId()).then(tutanotaProperties => {
 			if (tutanotaProperties.groupEncEntropy) {
 				try {
 					let entropy = aes128Decrypt(this.getUserGroupKey(), neverNull(tutanotaProperties.groupEncEntropy))
@@ -532,7 +544,7 @@ export class LoginFacade {
 
 	storeEntropy(): Promise<void> {
 		if (!this._accessToken) return Promise.resolve()
-		return loadRoot(TutanotaPropertiesTypeRef, this.getUserGroupId()).then(tutanotaProperties => {
+		return this._entity.loadRoot(TutanotaPropertiesTypeRef, this.getUserGroupId()).then(tutanotaProperties => {
 			tutanotaProperties.groupEncEntropy = encryptBytes(this.getUserGroupKey(), random.generateRandomData(32))
 			return update(tutanotaProperties)
 				.catch(LockedError, noOp)
@@ -662,7 +674,7 @@ export class LoginFacade {
 		// and therefore we would not be able to read the updated user
 		// additionally we do not want to use initSession() to keep the LoginFacade stateless (except second factor handling) because we do not want to have any race conditions
 		// when logging in normally after resetting the password
-		const eventRestClient = new EntityRestClient(() => ({}))
+		const eventRestClient = new EntityRestClient(() => ({}), this._restClient)
 
 		return serviceRequest(SysService.SessionService, HttpMethod.POST, sessionData, CreateSessionReturnTypeRef)
 		// Don't pass email address to avoid proposing to reset second factor when we're resetting password

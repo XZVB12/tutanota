@@ -3,7 +3,7 @@ import n from "../nodemocker"
 import o from "ospec/ospec.js"
 import chalk from 'chalk'
 import {defer} from "../../../src/api/common/utils/Utils"
-import {DesktopConfigKey} from "../../../src/desktop/config/DesktopConfigHandler"
+import {DesktopConfigKey} from "../../../src/desktop/config/DesktopConfig"
 
 o.spec("IPC tests", () => {
 	const CALLBACK_ID = "42"
@@ -49,12 +49,12 @@ o.spec("IPC tests", () => {
 		}
 	}
 	const conf = {
-		getDesktopConfig: () => {
+		getVar: () => {
 			return {
 				dummy: "value"
 			}
 		},
-		setDesktopConfig: () => Promise.resolve(),
+		setVar: () => Promise.resolve(),
 		listeners: {},
 		on: function (key, listener) {
 			this.listeners[key] = this.listeners[key] || []
@@ -126,6 +126,11 @@ o.spec("IPC tests", () => {
 		defer: defer,
 	}
 
+	const autoUpdater = {
+		updateInfo: null,
+		setUpdateDownloadedListener: () => {}
+	}
+
 	const standardMocks = () => {
 		windowMock = n.mock("__window", {
 			id: 42,
@@ -161,15 +166,16 @@ o.spec("IPC tests", () => {
 			alarmStorageMock: n.mock("__alarmStorage", alarmStorage).set(),
 			cryptoMock: n.mock("./DesktopCryptoFacade", crypto).set(),
 			dlMock: n.mock("__dl", dl).set(),
-			utilsMock: n.mock("../api/common/utils/Utils", utils).set()
+			utilsMock: n.mock("../api/common/utils/Utils", utils).set(),
+			autoUpdaterMock: n.mock("__updater", autoUpdater).set()
 		}
 	}
 
 	const setUpWithWindowAndInit = () => {
 		const sm = standardMocks()
-		const {electronMock, confMock, notifierMock, sockMock, sseMock, wmMock, alarmStorageMock, cryptoMock, dlMock} = sm
+		const {electronMock, confMock, notifierMock, sockMock, sseMock, wmMock, alarmStorageMock, cryptoMock, dlMock, autoUpdaterMock} = sm
 		const {IPC} = n.subject('../../src/desktop/IPC.js')
-		const ipc = new IPC(confMock, notifierMock, sseMock, wmMock, sockMock, alarmStorageMock, cryptoMock, dlMock)
+		const ipc = new IPC(confMock, notifierMock, sseMock, wmMock, sockMock, alarmStorageMock, cryptoMock, dlMock, autoUpdaterMock)
 
 		ipc.addWindow(42)
 		o(electronMock.ipcMain.on.callCount).equals(1)
@@ -444,6 +450,7 @@ o.spec("IPC tests", () => {
 					isMailtoHandler: "yesItIs",
 					runOnStartup: "noDoNot",
 					isIntegrated: true,
+					updateInfo: null,
 				}
 			})
 			done()
@@ -502,9 +509,9 @@ o.spec("IPC tests", () => {
 			args: [{more: "stuff"}]
 		}))
 
-		o(confMock.setDesktopConfig.callCount).equals(1)
-		o(confMock.setDesktopConfig.args[0]).equals("any")
-		o(confMock.setDesktopConfig.args[1]).deepEquals({
+		o(confMock.setVar.callCount).equals(1)
+		o(confMock.setVar.args[0]).equals("any")
+		o(confMock.setVar.args[1]).deepEquals({
 			more: "stuff"
 		})
 
@@ -762,21 +769,6 @@ o.spec("IPC tests", () => {
 				type: 'response',
 				value: undefined
 			})
-			done()
-		}, 10)
-	})
-
-	o("closeApp", done => {
-		const {electronMock} = setUpWithWindowAndInit()
-
-		electronMock.ipcMain.callbacks["42"]({}, JSON.stringify({
-			type: "closeApp",
-			id: "id2",
-			args: []
-		}))
-
-		setTimeout(() => {
-			o(electronMock.app.quit.callCount).equals(1)
 			done()
 		}, 10)
 	})

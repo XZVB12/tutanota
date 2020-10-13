@@ -15,6 +15,7 @@ import {getDateIndicator, getStartOfDay, isSameDayOfDate} from "../../api/common
 import type {CalendarDay} from "../../calendar/CalendarUtils"
 import {getCalendarMonth} from "../../calendar/CalendarUtils"
 import {DateTime} from "luxon"
+import {getAllDayDateLocal} from "../../api/common/utils/CommonCalendarUtils"
 
 /**
  * The HTML input[type=date] is not usable on desktops because:
@@ -59,15 +60,8 @@ export class DatePicker implements Component {
 		this.input.onUpdate(value => {
 			try {
 				if (value.trim().length > 0) {
-					let timestamp = parseDate(value)
-					if (isNaN(timestamp)) {
-						// always set invalidDate first to make sure that functions depending on the date stream can read the current invalidDate value
-						this.invalidDate = false
-						inputDate = null
-					} else {
-						this.invalidDate = false
-						inputDate = new Date(timestamp)
-					}
+					inputDate = parseDate(value)
+					this.invalidDate = false
 				} else {
 					this.invalidDate = false
 					inputDate = null
@@ -133,9 +127,13 @@ export class DatePicker implements Component {
 						minWidth: "100%",
 						minHeight: "100%"
 					},
-					// format as ISO date format, JS Date only supports full format.
+					// Format as ISO date format (YYY-MM-dd). We use luxon for that because JS Date only supports full format with time.
 					value: date != null ? DateTime.fromJSDate(date).toISODate() : "",
-					oninput: (event) => this.setDate(new Date(event.target.valueAsDate)),
+					oninput: (event) => {
+						// valueAsDate is always 00:00 UTC
+						// https://www.w3.org/TR/html52/sec-forms.html#date-state-typedate
+						this.setDate(getAllDayDateLocal(event.target.valueAsDate))
+					},
 				})
 				: null,
 		])

@@ -9,7 +9,6 @@ import {nativeApp} from "../../native/NativeWrapper"
 import type {
 	AccountTypeEnum,
 	BookingItemFeatureTypeEnum,
-	CalendarMethodEnum,
 	CloseEventBusOptionEnum,
 	ConversationTypeEnum,
 	EntropySrcEnum,
@@ -69,6 +68,7 @@ export class WorkerClient implements EntityRestInterface {
 	_queue: Queue;
 	_progressUpdater: ?progressUpdater;
 	_wsConnection: Stream<WsConnectionState> = stream("terminated");
+	_updateEntityEventProgress: Stream<number> = stream(0);
 	+infoMessages: Stream<InfoMessage>;
 
 	constructor() {
@@ -83,8 +83,7 @@ export class WorkerClient implements EntityRestInterface {
 			execNative: (message: Message) =>
 				nativeApp.invokeNative(new Request(downcast(message.args[0]), downcast(message.args[1]))),
 			entityEvent: (message: Message) => {
-				locator.eventController.notificationReceived(downcast(message.args[0]), downcast(message.args[1]))
-				return Promise.resolve()
+				return locator.eventController.notificationReceived(downcast(message.args[0]), downcast(message.args[1]))
 			},
 			error: (message: Message) => {
 				handleUncaughtError(objToError((message: any).args[0]))
@@ -105,6 +104,10 @@ export class WorkerClient implements EntityRestInterface {
 				this._wsConnection(downcast(message.args[0]));
 				return Promise.resolve()
 			},
+			updateEntityEventProgress: (message: Message) => {
+				this._updateEntityEventProgress(downcast(message.args[0]));
+				return Promise.resolve()
+			},
 			counterUpdate: (message: Message) => {
 				locator.eventController.counterUpdateReceived(downcast(message.args[0]))
 				return Promise.resolve()
@@ -112,7 +115,7 @@ export class WorkerClient implements EntityRestInterface {
 			infoMessage: (message: Message) => {
 				this.infoMessages(downcast(message.args[0]))
 				return Promise.resolve()
-			}
+			},
 		})
 	}
 
@@ -478,6 +481,10 @@ export class WorkerClient implements EntityRestInterface {
 
 	wsConnection(): Stream<WsConnectionState> {
 		return this._wsConnection.map(identity)
+	}
+
+	updateEntityEventProgress(): Stream<number> {
+		return this._updateEntityEventProgress.map(identity)
 	}
 
 	closeEventBus(closeOption: CloseEventBusOptionEnum): Promise<void> {

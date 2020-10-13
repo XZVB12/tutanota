@@ -146,6 +146,7 @@ type MainRequestType = 'execNative'
 	| 'progress'
 	| 'updateIndexState'
 	| 'updateWebSocketState'
+	| 'updateEntityEventProgress'
 	| 'counterUpdate'
 	| 'infoMessage'
 
@@ -196,9 +197,10 @@ type NativeRequestType = 'init'
 	| 'unIntegrateDesktop'
 	| 'unscheduleAlarms'
 	| 'setSearchOverlayState'
-	| 'closeApp'
 	| 'unload' // desktop
 	| 'changeLanguage'
+	| 'isUpdateAvailable' // check if update is ready to install
+	| 'manualUpdate' // progress update process (check, dl, install)
 
 
 type JsRequestType = 'createMailEditor'
@@ -214,12 +216,13 @@ type JsRequestType = 'createMailEditor'
 	| 'invalidateAlarms'
 	| 'applySearchResultToOverlay'
 	| 'addShortcuts'
+	| 'appUpdateDownloaded'
 	| 'openCustomer' // only for admin clients
 
 type WebContentsMessage
 	= 'initialize-ipc'
 	| 'set-zoom-factor'
-	| 'socket-message'
+	| 'open-customer'
 
 type Callback<T> = (err: ?Error, data?: T) => void
 type Command = (msg: Request) => Promise<any>
